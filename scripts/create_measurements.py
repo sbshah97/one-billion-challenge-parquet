@@ -21,35 +21,62 @@ import os
 import sys
 import random
 import time
+import argparse
+try:
+    import pandas as pd
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    PARQUET_AVAILABLE = True
+except ImportError:
+    PARQUET_AVAILABLE = False
 
 
-def check_args(file_args):
+def parse_args():
     """
-    Sanity checks out input and prints out usage if input is not a positive integer
+    Parse command line arguments with support for output format selection
     """
+    parser = argparse.ArgumentParser(
+        description="Generate synthetic measurement data for the One Billion Row Challenge",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  create_measurements.py 1_000_000_000                    # Generate 1B rows in TXT format
+  create_measurements.py 1_000_000_000 --format parquet   # Generate 1B rows in Parquet format
+  create_measurements.py 1_000_000_000 --format both      # Generate both TXT and Parquet
+        """
+    )
+    
+    parser.add_argument('num_records', type=str, 
+                       help='Number of records to create (supports underscore notation, e.g., 1_000_000_000)')
+    
+    parser.add_argument('--format', choices=['txt', 'parquet', 'both'], default='txt',
+                       help='Output format: txt (default), parquet, or both')
+    
+    parser.add_argument('--batch-size', type=int, default=10000,
+                       help='Batch size for processing (default: 10000)')
+    
+    args = parser.parse_args()
+    
+    # Validate num_records
     try:
-        if len(file_args) != 2 or int(file_args[1]) <= 0:
-            raise Exception()
-    except:
-        print("Usage:  create_measurements.sh <positive integer number of records to create>")
-        print("        You can use underscore notation for large number of records.")
-        print("        For example:  1_000_000_000 for one billion")
-        exit()
+        num_records = int(args.num_records.replace('_', ''))
+        if num_records <= 0:
+            raise ValueError()
+    except ValueError:
+        parser.error("Number of records must be a positive integer")
+    
+    # Check parquet availability if needed
+    if args.format in ['parquet', 'both'] and not PARQUET_AVAILABLE:
+        parser.error("Parquet format requires pandas and pyarrow. Install with: uv add pandas pyarrow")
+    
+    return args, num_records
 
 
-def build_weather_station_name_list():
+def generate_station_names():
     """
-    Grabs the weather station names from example data provided in repo and dedups
+    Generate synthetic station names for measurements
     """
-    station_names = []
-    with open('data/weather_stations.csv', 'r') as file:
-        file_contents = file.read()
-    for station in file_contents.splitlines():
-        if "#" in station:
-            next
-        else:
-            station_names.append(station.split(';')[0])
-    return list(set(station_names))
+    return [f"Station{i:04d}" for i in range(1, 1001)]
 
 
 def convert_bytes(num):
@@ -80,15 +107,15 @@ def format_elapsed_time(seconds):
             return f"{int(hours)} hours {int(minutes)} minutes {int(seconds)} seconds"
 
 
-def estimate_file_size(weather_station_names, num_rows_to_create):
+def estimate_file_size(num_rows_to_create):
     """
     Tries to estimate how large a file the test data will be
     """
-    total_name_bytes = sum(len(s.encode("utf-8")) for s in weather_station_names)
-    avg_name_bytes = total_name_bytes / float(len(weather_station_names))
-
-    # avg_temp_bytes = sum(len(str(n / 10.0)) for n in range(-999, 1000)) / 1999
-    avg_temp_bytes = 4.400200100050025
+    # Average station name length (Station0001 = 11 chars)
+    avg_name_bytes = 11
+    
+    # Average temperature bytes (e.g., "-99.9" = 5 chars)
+    avg_temp_bytes = 4.4
 
     # add 2 for separator and newline
     avg_line_length = avg_name_bytes + avg_temp_bytes + 2
@@ -98,25 +125,23 @@ def estimate_file_size(weather_station_names, num_rows_to_create):
     return f"Estimated max file size is:  {human_file_size}."
 
 
-def build_test_data(weather_station_names, num_rows_to_create):
+def build_test_data_txt(num_rows_to_create, batch_size=10000):
     """
-    Generates and writes to file the requested length of test data
+    Generates and writes test data to TXT file
     """
     start_time = time.time()
     coldest_temp = -99.9
     hottest_temp = 99.9
-    station_names_10k_max = random.choices(weather_station_names, k=10_000)
-    batch_size = 10000 # instead of writing line by line to file, process a batch of stations and put it to disk
+    station_names = generate_station_names()
     chunks = num_rows_to_create // batch_size
-    print('Building test data...')
+    print('Building TXT test data...')
 
     try:
-        with open("data/measurements.txt", 'w') as file:
+        with open("../data/measurements.txt", 'w') as file:
             progress = 0
             for chunk in range(chunks):
-                
-                batch = random.choices(station_names_10k_max, k=batch_size)
-                prepped_deviated_batch = '\n'.join([f"{station};{random.uniform(coldest_temp, hottest_temp):.1f}" for station in batch]) # :.1f should quicker than round on a large scale, because round utilizes mathematical operation
+                batch = random.choices(station_names, k=batch_size)
+                prepped_deviated_batch = '\n'.join([f"{station};{random.uniform(coldest_temp, hottest_temp):.1f}" for station in batch])
                 file.write(prepped_deviated_batch + '\n')
                 
                 # Update progress bar every 1%
@@ -126,32 +151,161 @@ def build_test_data(weather_station_names, num_rows_to_create):
                     sys.stdout.write(f"\r[{bars:<50}] {progress}%")
                     sys.stdout.flush()
         sys.stdout.write('\n')
+        
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        file_size = os.path.getsize("../data/measurements.txt")
+        human_file_size = convert_bytes(file_size)
+        
+        print("Test data successfully written to data/measurements.txt")
+        print(f"Actual file size:  {human_file_size}")
+        print(f"Elapsed time: {format_elapsed_time(elapsed_time)}")
+        
+        return "../data/measurements.txt", elapsed_time, file_size
+        
     except Exception as e:
         print("Something went wrong. Printing error info and exiting...")
         print(e)
         exit()
+
+
+def build_test_data_parquet(num_rows_to_create, batch_size=10000):
+    """
+    Generates test data directly to Parquet format
+    """
+    start_time = time.time()
+    coldest_temp = -99.9
+    hottest_temp = 99.9
+    station_names = generate_station_names()
+    chunks = num_rows_to_create // batch_size
     
-    end_time = time.time()
-    elapsed_time = end_time - start_time
-    file_size = os.path.getsize("data/measurements.txt")
-    human_file_size = convert_bytes(file_size)
- 
-    print("Test data successfully written to 1brc/data/measurements.txt")
-    print(f"Actual file size:  {human_file_size}")
-    print(f"Elapsed time: {format_elapsed_time(elapsed_time)}")
+    print('Building Parquet test data...')
+    
+    # Define schema
+    schema = pa.schema([
+        ('station', pa.string()),
+        ('temperature', pa.float32())
+    ])
+    
+    try:
+        parquet_writer = None
+        rows_processed = 0
+        
+        for chunk in range(chunks):
+            # Generate batch data
+            batch_stations = random.choices(station_names, k=batch_size)
+            batch_temperatures = [random.uniform(coldest_temp, hottest_temp) for _ in range(batch_size)]
+            
+            # Create DataFrame for this batch
+            batch_df = pd.DataFrame({
+                'station': batch_stations,
+                'temperature': batch_temperatures
+            })
+            batch_df['temperature'] = batch_df['temperature'].astype('float32')
+            
+            # Convert to PyArrow table
+            table = pa.Table.from_pandas(batch_df, schema=schema)
+            
+            # Initialize writer on first batch
+            if parquet_writer is None:
+                parquet_writer = pq.ParquetWriter(
+                    "../data/measurements.parquet",
+                    schema=schema,
+                    compression='snappy',
+                    use_dictionary=['station'],
+                    write_statistics=True
+                )
+            
+            # Write batch
+            parquet_writer.write_table(table)
+            rows_processed += batch_size
+            
+            # Progress reporting
+            progress = ((chunk + 1) * 100) // chunks
+            bars = '=' * (progress // 2)
+            sys.stdout.write(f"\r[{bars:<50}] {progress}%")
+            sys.stdout.flush()
+        
+        # Close writer
+        if parquet_writer:
+            parquet_writer.close()
+            
+        sys.stdout.write('\n')
+        
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        file_size = os.path.getsize("../data/measurements.parquet")
+        human_file_size = convert_bytes(file_size)
+        
+        print("Test data successfully written to data/measurements.parquet")
+        print(f"Actual file size:  {human_file_size}")
+        print(f"Elapsed time: {format_elapsed_time(elapsed_time)}")
+        
+        return "../data/measurements.parquet", elapsed_time, file_size
+        
+    except Exception as e:
+        print("Something went wrong. Printing error info and exiting...")
+        print(e)
+        exit()
+
+
+def build_test_data(num_rows_to_create, output_format='txt', batch_size=10000):
+    """
+    Main function to generate test data in specified format(s)
+    """
+    results = {}
+    
+    if output_format in ['txt', 'both']:
+        print("=== Generating TXT Format ===")
+        txt_file, txt_time, txt_size = build_test_data_txt(num_rows_to_create, batch_size)
+        results['txt'] = {'file': txt_file, 'time': txt_time, 'size': txt_size}
+    
+    if output_format in ['parquet', 'both']:
+        print("=== Generating Parquet Format ===")
+        parquet_file, parquet_time, parquet_size = build_test_data_parquet(num_rows_to_create, batch_size)
+        results['parquet'] = {'file': parquet_file, 'time': parquet_time, 'size': parquet_size}
+    
+    # Show comparison if both formats generated
+    if output_format == 'both':
+        print("\n=== Format Comparison ===")
+        compression_ratio = (1 - (results['parquet']['size'] / results['txt']['size'])) * 100
+        speed_ratio = results['txt']['time'] / results['parquet']['time'] if results['parquet']['time'] > 0 else 0
+        print(f"TXT file:     {convert_bytes(results['txt']['size'])} in {format_elapsed_time(results['txt']['time'])}")
+        print(f"Parquet file: {convert_bytes(results['parquet']['size'])} in {format_elapsed_time(results['parquet']['time'])}")
+        print(f"Compression:  {compression_ratio:.1f}% smaller")
+        print(f"Speed:        Parquet was {speed_ratio:.1f}x {'faster' if speed_ratio > 1 else 'slower'}")
+    
+    return results
 
 
 def main():
     """
-    main program function
+    Main program function with support for multiple output formats
     """
-    check_args(sys.argv)
-    num_rows_to_create = int(sys.argv[1])
-    weather_station_names = []
-    weather_station_names = build_weather_station_name_list()
-    print(estimate_file_size(weather_station_names, num_rows_to_create))
-    build_test_data(weather_station_names, num_rows_to_create)
-    print("Test data build complete.")
+    args, num_rows_to_create = parse_args()
+    
+    print(f"=== One Billion Row Challenge - Data Generator ===")
+    print(f"Records to generate: {num_rows_to_create:,}")
+    print(f"Output format: {args.format}")
+    print(f"Batch size: {args.batch_size:,}")
+    print()
+    
+    # Show size estimate for TXT format
+    if args.format in ['txt', 'both']:
+        print(estimate_file_size(num_rows_to_create))
+    
+    # Generate data in requested format(s)
+    results = build_test_data(num_rows_to_create, args.format, args.batch_size)
+    
+    print("\n🎉 Data generation complete!")
+    
+    # Show final summary
+    if 'parquet' in results:
+        print(f"✅ Parquet file ready for Go 1BRC implementation: {results['parquet']['file']}")
+    if 'txt' in results:
+        print(f"✅ TXT file available: {results['txt']['file']}")
+        
+    print("\nYou can now run the One Billion Row Challenge with the generated data!")
 
 
 if __name__ == "__main__":
