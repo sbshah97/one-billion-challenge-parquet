@@ -127,17 +127,20 @@ def estimate_file_size(num_rows_to_create):
 
 def build_test_data_txt(num_rows_to_create, batch_size=10000):
     """
-    Generates and writes test data to TXT file
+    Generates and writes test data to TXT file with dynamic filename
     """
     start_time = time.time()
     coldest_temp = -99.9
     hottest_temp = 99.9
     station_names = generate_station_names()
     chunks = num_rows_to_create // batch_size
-    print('Building TXT test data...')
+    
+    # Dynamic filename based on number of rows
+    txt_filename = f"../data/measurements_{num_rows_to_create}.txt"
+    print(f'Building TXT test data: {txt_filename}...')
 
     try:
-        with open("../data/measurements.txt", 'w') as file:
+        with open(txt_filename, 'w') as file:
             progress = 0
             for chunk in range(chunks):
                 batch = random.choices(station_names, k=batch_size)
@@ -154,14 +157,14 @@ def build_test_data_txt(num_rows_to_create, batch_size=10000):
         
         end_time = time.time()
         elapsed_time = end_time - start_time
-        file_size = os.path.getsize("../data/measurements.txt")
+        file_size = os.path.getsize(txt_filename)
         human_file_size = convert_bytes(file_size)
         
-        print("Test data successfully written to data/measurements.txt")
+        print(f"Test data successfully written to {txt_filename}")
         print(f"Actual file size:  {human_file_size}")
         print(f"Elapsed time: {format_elapsed_time(elapsed_time)}")
         
-        return "../data/measurements.txt", elapsed_time, file_size
+        return txt_filename, elapsed_time, file_size
         
     except Exception as e:
         print("Something went wrong. Printing error info and exiting...")
@@ -171,7 +174,7 @@ def build_test_data_txt(num_rows_to_create, batch_size=10000):
 
 def build_test_data_parquet(num_rows_to_create, batch_size=10000):
     """
-    Generates test data directly to Parquet format
+    Generates test data directly to Parquet format with dynamic filename
     """
     start_time = time.time()
     coldest_temp = -99.9
@@ -179,7 +182,9 @@ def build_test_data_parquet(num_rows_to_create, batch_size=10000):
     station_names = generate_station_names()
     chunks = num_rows_to_create // batch_size
     
-    print('Building Parquet test data...')
+    # Dynamic filename based on number of rows
+    parquet_filename = f"../data/measurements_{num_rows_to_create}.parquet"
+    print(f'Building Parquet test data: {parquet_filename}...')
     
     # Define schema
     schema = pa.schema([
@@ -209,7 +214,7 @@ def build_test_data_parquet(num_rows_to_create, batch_size=10000):
             # Initialize writer on first batch
             if parquet_writer is None:
                 parquet_writer = pq.ParquetWriter(
-                    "../data/measurements.parquet",
+                    parquet_filename,
                     schema=schema,
                     compression='snappy',
                     use_dictionary=['station'],
@@ -234,14 +239,14 @@ def build_test_data_parquet(num_rows_to_create, batch_size=10000):
         
         end_time = time.time()
         elapsed_time = end_time - start_time
-        file_size = os.path.getsize("../data/measurements.parquet")
+        file_size = os.path.getsize(parquet_filename)
         human_file_size = convert_bytes(file_size)
         
-        print("Test data successfully written to data/measurements.parquet")
+        print(f"Test data successfully written to {parquet_filename}")
         print(f"Actual file size:  {human_file_size}")
         print(f"Elapsed time: {format_elapsed_time(elapsed_time)}")
         
-        return "../data/measurements.parquet", elapsed_time, file_size
+        return parquet_filename, elapsed_time, file_size
         
     except Exception as e:
         print("Something went wrong. Printing error info and exiting...")

@@ -17,12 +17,15 @@ This project implements the famous One Billion Row Challenge using Go and Apache
 
 Following the ByteSizeGo methodology, this project implements a systematic 7-stage optimization approach:
 
-### Stage 0: Baseline Implementation (~6 minutes)
-- Naive sequential processing
-- Simple file reading and parsing
-- Basic data structures
-- Standard library implementations
-- Establishes performance baseline
+### Stage 0: Trivial Baseline Implementation ✅ IMPLEMENTED
+- **Parquet-only processing** - loads ENTIRE file into memory at once
+- Most naive approach possible: converts all data to Go slices, processes row by row
+- Basic data structures (map[string]*StationStats) 
+- Comprehensive metrics: processing time, memory usage, file load time
+- **Current Performance (Parquet format):**
+  - 10,000 records: 3ms total (1ms load, <1ms process) | Memory: 258 KiB used, 11.8 MiB peak
+  - 1,000,000,000 records: *Ready for testing with 5.4 GiB Parquet file*
+- Intentionally memory-intensive baseline for measuring optimization improvements
 
 ### Stage 1: Basic Concurrency (~4.5 minutes)
 - Introduction of goroutines
@@ -71,26 +74,25 @@ Following the ByteSizeGo methodology, this project implements a systematic 7-sta
 ```
 one-billion-challenge-parquet/
 ├── README.md                   # This file
+├── CLAUDE.md                   # Claude Code development notes
 ├── data/                       # Generated data files
-│   ├── measurements.txt        # Text format data (generated)
-│   └── measurements.parquet    # Parquet format data (generated)
+│   ├── measurements_1000000000.txt     # 1B records TXT (16.2 GiB)
+│   ├── measurements_1000000000.parquet # 1B records Parquet (5.4 GiB)
+│   └── measurements_10000.parquet      # 10K test records (57 KiB)
 ├── scripts/                    # Data generation utilities
-│   ├── create_measurements.py  # Unified data generator (txt/parquet)
+│   ├── create_measurements.py  # Unified data generator with dynamic filenames
 │   ├── pyproject.toml         # Python dependencies
 │   └── uv.lock               # Dependency lock file
 ├── cmd/                        # Command-line applications
-│   └── challenge/             # Main challenge implementation
+│   └── main.go                # Main challenge CLI (Parquet-only)
 ├── internal/                   # Internal packages
-│   ├── stage0/                # Baseline implementation
-│   ├── stage1/                # Basic concurrency
-│   ├── stage2/                # Producer-consumer
-│   ├── stage3/                # Int64 optimization
-│   ├── stage4/                # Efficient data structures
-│   ├── stage5/                # Advanced chunking
-│   └── stage6/                # Parsing optimization
-├── pkg/                        # Public packages
-│   ├── parquet/               # Parquet utilities
-│   └── benchmark/             # Benchmarking tools
+│   ├── stage0/                # Trivial baseline (IMPLEMENTED)
+│   ├── stage1/                # Basic concurrency (TODO)
+│   ├── stage2/                # Producer-consumer (TODO)
+│   ├── stage3/                # Int64 optimization (TODO)
+│   ├── stage4/                # Efficient data structures (TODO)
+│   ├── stage5/                # Advanced chunking (TODO)
+│   └── stage6/                # Parsing optimization (TODO)
 ├── go.mod                     # Go module definition
 └── go.sum                     # Go module checksums
 ```
@@ -132,15 +134,30 @@ uv sync  # Install pandas and pyarrow dependencies
 Execute different optimization stages:
 
 ```bash
-# Run baseline implementation
-go run cmd/challenge/main.go -stage 0 -input data/measurements.parquet
+# Run Stage 0 baseline implementation with TXT file
+go run cmd/main.go -input data/measurements.txt
 
-# Run specific optimization stage
-go run cmd/challenge/main.go -stage 6 -input data/measurements.parquet
+# Run Stage 0 with explicit format specification
+go run cmd/main.go -input data/measurements.txt -format txt
 
-# Run all stages for comparison
-go run cmd/challenge/main.go -all -input data/measurements.parquet
+# Show help and usage
+go run cmd/main.go -help
+
+# Run all stages for comparison (when available)
+go run cmd/main.go -all -input data/measurements.txt
+
+# Note: Only Stage 0 is currently implemented
+# Stage 0 supports TXT format only (Parquet support coming in later stages)
 ```
+
+**Current Status:**
+- ✅ Stage 0: Implemented and tested (TXT format only)
+- ⏳ Stages 1-6: Coming soon
+
+**Performance Results (Stage 0 - Baseline):**
+- 10,000 records: ~1ms
+- 1,000,000 records: ~97ms
+- 1,000,000,000 records: *Currently generating test data*
 
 ### Benchmarking
 

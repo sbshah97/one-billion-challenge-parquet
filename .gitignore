@@ -50,3 +50,6 @@ ehthumbs.db
 Thumbs.db
 
 scripts/.venv/
+scripts/uv.lock
+challenge
+data/

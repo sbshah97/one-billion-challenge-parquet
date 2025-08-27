@@ -65,6 +65,26 @@ The script accepts underscore notation for large numbers and provides:
 - Dependencies managed with `uv` (Python package manager): pandas for data processing, pyarrow for Parquet support
 - Parquet format provides significant compression benefits (~70-80% smaller than TXT) with faster read performance for columnar operations
 
+## Best Practices for Claude Code
+
+### Bash Commands with Directory Changes
+Always use absolute paths when using bash commands to avoid path resolution issues across different working directories:
+
+**❌ Avoid relative paths in background processes:**
+```bash
+cd scripts && python create_measurements.py 1000000
+```
+
+**✅ Use absolute paths:**
+```bash
+/Users/salmanshah/Code/one-billion-challenge-parquet/scripts/.venv/bin/python /Users/salmanshah/Code/one-billion-challenge-parquet/scripts/create_measurements.py 1000000 --format parquet
+```
+
+### Data Generation Commands
+- TXT format: Run from project root with absolute paths
+- Parquet format: Requires virtual environment activation - use `.venv/bin/python` with absolute path
+- Large file generation (1B records): Run in background and monitor progress with BashOutput tool
+
 ## File Path References
 
 When referencing locations in this codebase:
