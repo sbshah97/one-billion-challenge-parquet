@@ -8,42 +8,69 @@ This is a One Billion Row Challenge implementation focused on processing weather
 
 ## Repository Structure
 
-- `data/` - Contains input data files
-  - `weather_stations.csv` - List of weather station names and coordinates (413 cities worldwide)
-  - `measurements.txt` - Generated measurement data file (created by the Python script)
+- `data/` - Contains generated data files
+  - `measurements.txt` - Generated measurement data in text format (StationName;Temperature)
+  - `measurements.parquet` - Generated measurement data in Parquet format (columnar)
 - `scripts/` - Data generation utilities
-  - `create_measurements.py` - Python script to generate test measurement data
+  - `create_measurements.py` - Unified Python script to generate test data in TXT and/or Parquet formats
+  - `pyproject.toml` - Python project configuration with dependencies (pandas, pyarrow)
+  - `uv.lock` - Dependency lock file for reproducible builds
 
 ## Data Generation
 
-The main data generation script is located at `scripts/create_measurements.py`. This script:
+The unified data generation script is located at `scripts/create_measurements.py`. This script:
 
-- Reads weather station names from `data/weather_stations.csv` 
-- Generates synthetic temperature measurements between -99.9°C and 99.9°C
-- Outputs data in the format: `{station_name};{temperature}` (one per line)
+- Generates synthetic weather station names (Station0001-Station1000)
+- Creates synthetic temperature measurements between -99.9°C and 99.9°C
+- Supports multiple output formats:
+  - TXT format: `{station_name};{temperature}` (one per line) → `data/measurements.txt`
+  - Parquet format: Columnar storage with proper schema → `data/measurements.parquet`
+  - Both formats simultaneously for comparison
 - Supports generating datasets of any size (including 1 billion rows)
-- Writes output to `data/measurements.txt`
+- Uses efficient batch processing with configurable batch sizes
+- Provides progress tracking and performance metrics
 
 ### Running Data Generation
 
 ```bash
 cd scripts/
-python create_measurements.py <number_of_records>
-# Example: python create_measurements.py 1_000_000_000
+
+# Generate 1 billion rows in TXT format (default)
+python create_measurements.py 1_000_000_000
+
+# Generate 1 billion rows in Parquet format
+python create_measurements.py 1_000_000_000 --format parquet
+
+# Generate both TXT and Parquet formats for comparison
+python create_measurements.py 1_000_000_000 --format both
+
+# Generate with custom batch size (useful for memory management)
+python create_measurements.py 1_000_000_000 --format parquet --batch-size 50000
+
+# Generate smaller dataset for testing
+python create_measurements.py 1_000_000 --format both
 ```
 
-The script accepts underscore notation for large numbers and provides progress feedback during generation.
+The script accepts underscore notation for large numbers and provides:
+- Real-time progress tracking with progress bars
+- Performance metrics (elapsed time, file sizes, processing rates)
+- Format comparison statistics when generating both formats
+- Memory-efficient batch processing
 
 ## Development Notes
 
 - The project is based on the original Java implementation from https://github.com/gunnarmorling/1brc
-- Weather station data is adapted from SimpleMaps world cities dataset (Creative Commons Attribution 4.0)
-- The Python script uses batch processing (10,000 records per batch) for efficient file I/O
-- No additional package dependencies are required for the data generation script (uses only Python standard library)
+- Uses synthetic weather station names (Station0001-Station1000) instead of real city names for simplicity
+- The Python script uses configurable batch processing (default 10,000 records per batch) for efficient file I/O
+- Dependencies managed with `uv` (Python package manager): pandas for data processing, pyarrow for Parquet support
+- Parquet format provides significant compression benefits (~70-80% smaller than TXT) with faster read performance for columnar operations
 
 ## File Path References
 
 When referencing locations in this codebase:
-- Data generation logic: `scripts/create_measurements.py:101-142`
-- Weather station data parsing: `scripts/create_measurements.py:40-52`
-- Temperature range configuration: `scripts/create_measurements.py:106-107`
+- Main data generation script: `scripts/create_measurements.py`
+- TXT format generation logic: `scripts/create_measurements.py:128-170`
+- Parquet format generation logic: `scripts/create_measurements.py:172-250`
+- Command-line argument parsing: `scripts/create_measurements.py:34-72`
+- Temperature range configuration: `scripts/create_measurements.py:133-134` (TXT) and `scripts/create_measurements.py:177-178` (Parquet)
+- Project dependencies: `scripts/pyproject.toml`
