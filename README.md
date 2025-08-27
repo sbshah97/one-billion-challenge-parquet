@@ -72,10 +72,12 @@ Following the ByteSizeGo methodology, this project implements a systematic 7-sta
 one-billion-challenge-parquet/
 ├── README.md                   # This file
 ├── data/                       # Generated data files
-│   └── measurements.parquet    # Sample measurement data
-├── scripts/                    # Utility scripts
-│   ├── generate-data.go        # Data generation script
-│   └── benchmark.sh           # Benchmarking scripts
+│   ├── measurements.txt        # Text format data (generated)
+│   └── measurements.parquet    # Parquet format data (generated)
+├── scripts/                    # Data generation utilities
+│   ├── create_measurements.py  # Unified data generator (txt/parquet)
+│   ├── pyproject.toml         # Python dependencies
+│   └── uv.lock               # Dependency lock file
 ├── cmd/                        # Command-line applications
 │   └── challenge/             # Main challenge implementation
 ├── internal/                   # Internal packages
@@ -97,17 +99,32 @@ one-billion-challenge-parquet/
 
 ### Data Generation
 
-Generate test data for the challenge:
+Generate test data for the challenge using the Python script:
 
 ```bash
-# Generate 1 billion rows (default)
-go run scripts/generate-data.go
+# Navigate to scripts directory
+cd scripts/
 
-# Generate custom number of rows
-go run scripts/generate-data.go -rows 100000000
+# Generate 1 billion rows in TXT format (default)
+python create_measurements.py 1_000_000_000
 
-# Generate with custom output file
-go run scripts/generate-data.go -output data/custom.parquet
+# Generate 1 billion rows in Parquet format
+python create_measurements.py 1_000_000_000 --format parquet
+
+# Generate both TXT and Parquet formats
+python create_measurements.py 1_000_000_000 --format both
+
+# Generate with custom batch size for memory efficiency
+python create_measurements.py 1_000_000_000 --format parquet --batch-size 50000
+
+# Generate smaller dataset for testing
+python create_measurements.py 1_000_000 --format both
+```
+
+**Dependencies:** Install required Python packages:
+```bash
+cd scripts/
+uv sync  # Install pandas and pyarrow dependencies
 ```
 
 ### Running Implementations
@@ -169,11 +186,16 @@ go test -bench=. -benchmem -cpuprofile=cpu.prof ./...
    git clone <repository-url>
    cd one-billion-challenge-parquet
    go mod download
+   
+   # Setup Python environment for data generation
+   cd scripts/
+   uv sync  # Install pandas and pyarrow
    ```
 
 2. **Generate Test Data**
    ```bash
-   go run scripts/generate-data.go -rows 1000000  # Start small
+   cd scripts/
+   python create_measurements.py 1_000_000 --format both  # Start small
    ```
 
 3. **Implement Stage**
